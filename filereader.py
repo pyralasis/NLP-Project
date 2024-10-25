@@ -7,18 +7,18 @@ def getFileFromUrl(url):
     return data
 
 
-class dataPoint:
-    def __init__(self, jsonData):
-        self.sentId = jsonData['sent_id']
-        self.text = jsonData['text']
+class DataPoint:
+    def __init__(self, json_data):
+        self.sent_id = json_data['sent_id']
+        self.text = json_data['text']
         self.opinions = []
-        for currentOpinion in jsonData['opinions']:
-            self.opinions.append(opinion(currentOpinion))
+        for current_opinion in json_data['opinions']:
+            self.opinions.append(Opinion(current_opinion))
 
-class opinion:
-    def __init__(self, opinionData):
-        self.source = opinionData['Source']
-        self.target = opinionData['Target']
-        self.polarExpression = opinionData['Polar_expression']
-        self.polarity = opinionData['Polarity']
-        self.intensity = opinionData['Intensity']
+class Opinion:
+    def __init__(self, opinion_data):
+        self.source = opinion_data['Source']
+        self.target = opinion_data['Target']
+        self.polar_expression = opinion_data['Polar_expression']
+        self.polarity = opinion_data['Polarity']
+        self.intensity = opinion_data['Intensity']
