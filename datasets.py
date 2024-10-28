@@ -1,5 +1,5 @@
 import os
-import pandas as pd
+# import pandas as pd
 from torch.utils.data import Dataset
 from torchvision.io import read_image
 from filereader import *
@@ -24,5 +24,5 @@ class SentimentDataset(Dataset):
         if self.transform:
             text = self.transform(text)
         if self.target_transform:
-            opinions = self.target_transform(opinions)
-        return data_point, opinions
+            opinions = self.target_transform(opinions)        
+        return text, opinions
