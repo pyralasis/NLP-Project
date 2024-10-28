@@ -8,6 +8,7 @@ import spacy
 import numpy as np
 from torchvision.transforms import Compose, ToTensor, Lambda
 
+# Check if there is a usable gpu
 device = (
     "cuda"
     if torch.cuda.is_available()
@@ -18,54 +19,92 @@ device = (
 print(f"Using {device} device")
 
 def main():
-    model = NeuralNetwork().to(device)
-
+    # Transform the sentence into an array of embeddings
     transform = Compose([            
         Lambda(text_to_array),
         ToTensor()
     ])
     
+    # Check if the datapoint has an opinion
     target_transform = Lambda(lambda opinion_list: torch.tensor([1 if len(opinion_list) > 0 else 0], dtype=torch.float32))
 
+    # The training dataset
     train_ds = SentimentDataset(
         'https://raw.githubusercontent.com/jerbarnes/semeval22_structured_sentiment/refs/heads/master/data/opener_en/train.json',
         transform,
         target_transform
     )
 
+    # The test dataset
     test_ds = SentimentDataset(
         'https://raw.githubusercontent.com/jerbarnes/semeval22_structured_sentiment/refs/heads/master/data/opener_en/test.json',
         transform,
         target_transform
     )
 
+    # Dataloaders iteratoe over the dataset
+    # The training dataloader
     train_dataloader = DataLoader(train_ds, batch_size=64, shuffle=True)
+    # The test dataloader
     test_dataloader = DataLoader(test_ds, batch_size=64, shuffle=True)
+    
+    model = NeuralNetwork().to(device)
+
+    # The optimizer; Holds current state and updates the parameters
     optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+
+    # The loss function
     loss = nn.MSELoss()
 
+    # The training loop for my test network
+    # epochs = 30
+    # for t in range(epochs):
+    #     print(f"-------------------------------Epoch {t+1}-------------------------------")
+    #     print(f"Training...")
+    #     train(train_dataloader, model, loss, optimizer)
+    #     print(f"Testing...")
+    #     test(test_dataloader, model, loss)
+        
+    #     model.eval()
+    #     print(f"Custom...")
+    #     with torch.no_grad():
+    #         x1 = transform("I walked to the grocery store on Tuesday .").to(device)
+    #         x2 = transform("Comments on my stay at Club Hotel Dolphin").to(device)
+    #         x3 = transform("Room service needs to be improved and we experienced that some of the Linen provided are damaged .").to(device)
+    #         x4 = transform("The staff at the grocery store were nice to me . I enjoyed my shopping trip at the grocery store .").to(device)
+    #         print(model.forward(x1).item(), model.forward(x2).item(), model.forward(x3).item(), model.forward(x4).item())
+    # print("Done!")
+
+    LSTMmodel = TestLSTM(96, 32, train_ds.vocab_count, 0).to(device)
+    LSTMoptimizer = torch.optim.SGD(LSTMmodel.parameters(), lr=1e-3)
+
+    # The training loop for my test LSTM network
     epochs = 30
     for t in range(epochs):
         print(f"-------------------------------Epoch {t+1}-------------------------------")
         print(f"Training...")
-        train(train_dataloader, model, loss, optimizer)
+        train(train_dataloader, LSTMmodel, loss, LSTMoptimizer)
         print(f"Testing...")
-        test(test_dataloader, model, loss)
+        test(test_dataloader, LSTMmodel, loss)
         
-        model.eval()
+        LSTMmodel.eval()
         print(f"Custom...")
         with torch.no_grad():
             x1 = transform("I walked to the grocery store on Tuesday .").to(device)
             x2 = transform("Comments on my stay at Club Hotel Dolphin").to(device)
             x3 = transform("Room service needs to be improved and we experienced that some of the Linen provided are damaged .").to(device)
             x4 = transform("The staff at the grocery store were nice to me . I enjoyed my shopping trip at the grocery store .").to(device)
-            print(model.forward(x1).item(), model.forward(x2).item(), model.forward(x3).item(), model.forward(x4).item())
+            print(LSTMmodel.forward(x1).item(), LSTMmodel.forward(x2).item(), LSTMmodel.forward(x3).item(), LSTMmodel.forward(x4).item())
     print("Done!")
 
+
+# Spacy embedding model
 nlp = spacy.load("en_core_web_sm")
+
 TOKEN_VECTOR_LENGTH = 96
 MAX_TOKEN_COUNT = 50
 
+# Converts a string into tokens then into an array of embeddings
 def text_to_array(text: str):
     tokens = nlp(text)
     x = np.zeros((MAX_TOKEN_COUNT, TOKEN_VECTOR_LENGTH), dtype=np.float32)
@@ -77,6 +116,7 @@ def text_to_array(text: str):
 
     return x
 
+# The training function
 def train(dataloader, model, loss_fn, optimizer):
     size = len(dataloader.dataset) 
     model.train()
@@ -96,7 +136,7 @@ def train(dataloader, model, loss_fn, optimizer):
             loss, current = loss.item(), (batch + 1) * len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
-    
+# The testing function
 def test(dataloader, model, loss_fn):
     size = len(dataloader.dataset)
     num_batches = len(dataloader)

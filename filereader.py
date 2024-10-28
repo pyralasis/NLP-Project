@@ -7,13 +7,18 @@ def getFileFromUrl(url):
     return data
 
 
+# A representation of a piece of data from the datasets
 class DataPoint:
     def __init__(self, json_data):
-        self.sent_id = json_data['sent_id']
-        self.text = json_data['text']
-        self.opinions = []
+        self.sent_id: str = json_data['sent_id']
+        self.text: str = json_data['text']
+        self.opinions: Opinion = []
+
         for current_opinion in json_data['opinions']:
             self.opinions.append(Opinion(current_opinion))
+        
+        self.vocab_size = len(self.text.split())
+
 
 class Opinion:
     def __init__(self, opinion_data):
@@ -26,3 +31,5 @@ class Opinion:
     # MIGHT NEED LATER
     def to_tuple(self):
         ...
+
+

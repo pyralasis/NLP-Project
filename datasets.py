@@ -11,8 +11,19 @@ class SentimentDataset(Dataset):
     
         data = getFileFromUrl(url)
         self.my_data_points: list[DataPoint] = []
+        unique_vocab: set = set()
+
         for item in data:
-            self.my_data_points.append(DataPoint(item))    
+            current_data_point: DataPoint = DataPoint(item)
+            self.my_data_points.append(current_data_point)
+
+            # Add all words in text to set in order to get the total count of unique vocab
+            for word in current_data_point.text.split():
+                unique_vocab.add(word)
+
+        self.vocab_count = len(unique_vocab)
+        print(self.vocab_count)
+
 
     def __len__(self):
         return len(self.my_data_points)
