@@ -38,7 +38,8 @@ class TestLSTM(nn.Module):
 
         # The LSTM takes word embeddings as inputs, and outputs hidden states
         # with dimensionality hidden_dim.
-        self.lstm = nn.LSTM(embedding_dim, hidden_dim)
+        self.left_to_right = nn.LSTM(embedding_dim, hidden_dim, bidirectional=True)
+        self.right_to_left = nn.LSTM(embedding_dim, hidden_dim, bidirectional=True)
 
         # The linear layer that maps from hidden state space to tag space
         # self.hidden2tag = nn.Linear(hidden_dim, tagset_size)

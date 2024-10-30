@@ -19,6 +19,7 @@ device = (
 print(f"Using {device} device")
 
 def main():
+    text_to_contextualized_array("This is a test .")
     # Transform the sentence into an array of embeddings
     transform = Compose([            
         Lambda(text_to_array),
@@ -79,23 +80,23 @@ def main():
     LSTMoptimizer = torch.optim.SGD(LSTMmodel.parameters(), lr=1e-3)
 
     # The training loop for my test LSTM network
-    epochs = 30
-    for t in range(epochs):
-        print(f"-------------------------------Epoch {t+1}-------------------------------")
-        print(f"Training...")
-        train(train_dataloader, LSTMmodel, loss, LSTMoptimizer)
-        print(f"Testing...")
-        test(test_dataloader, LSTMmodel, loss)
+    # epochs = 30
+    # for t in range(epochs):
+    #     print(f"-------------------------------Epoch {t+1}-------------------------------")
+    #     print(f"Training...")
+    #     train(train_dataloader, LSTMmodel, loss, LSTMoptimizer)
+    #     print(f"Testing...")
+    #     test(test_dataloader, LSTMmodel, loss)
         
-        LSTMmodel.eval()
-        print(f"Custom...")
-        with torch.no_grad():
-            x1 = transform("I walked to the grocery store on Tuesday .").to(device)
-            x2 = transform("Comments on my stay at Club Hotel Dolphin").to(device)
-            x3 = transform("Room service needs to be improved and we experienced that some of the Linen provided are damaged .").to(device)
-            x4 = transform("The staff at the grocery store were nice to me . I enjoyed my shopping trip at the grocery store .").to(device)
-            print(LSTMmodel.forward(x1).item(), LSTMmodel.forward(x2).item(), LSTMmodel.forward(x3).item(), LSTMmodel.forward(x4).item())
-    print("Done!")
+    #     LSTMmodel.eval()
+    #     print(f"Custom...")
+    #     with torch.no_grad():
+    #         x1 = transform("I walked to the grocery store on Tuesday .").to(device)
+    #         x2 = transform("Comments on my stay at Club Hotel Dolphin").to(device)
+    #         x3 = transform("Room service needs to be improved and we experienced that some of the Linen provided are damaged .").to(device)
+    #         x4 = transform("The staff at the grocery store were nice to me . I enjoyed my shopping trip at the grocery store .").to(device)
+    #         print(LSTMmodel.forward(x1).item(), LSTMmodel.forward(x2).item(), LSTMmodel.forward(x3).item(), LSTMmodel.forward(x4).item())
+    # print("Done!")
 
 
 # Spacy embedding model
@@ -115,6 +116,20 @@ def text_to_array(text: str):
         i += 1
 
     return x
+
+def text_to_contextualized_array(text: str):
+    tokens = nlp(text)
+    x = np.zeros((MAX_TOKEN_COUNT, TOKEN_VECTOR_LENGTH), dtype=np.float32)
+    for token in tokens:
+        for i in range(min(len(tokens), 50)):
+            tokenEmbedding = token.vector
+            posEmbedding = nlp(token.pos_).vector
+            lemmaEmbedding = nlp(token.lemma_).vector
+            # TODO CHARACTER EMBEDDINGS. SUM UP CHARACTER EMBEDDINGS MAYBE?
+            x[i] = np.concatenate(tokenEmbedding, posEmbedding, lemmaEmbedding)
+            i += 1
+    return x
+        
 
 # The training function
 def train(dataloader, model, loss_fn, optimizer):
