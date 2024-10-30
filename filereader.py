@@ -1,5 +1,12 @@
 import json, requests
 
+#read in local json
+def load_json_data(file_path):
+    """Loads data from a JSON file and returns the list of entries."""
+    with open(file_path, 'r', encoding='utf-8') as file:
+        data = json.load(file)
+    return data
+
 # takes in a url and returns the json in the file
 def getFileFromUrl(url):
     response = requests.get(url)
