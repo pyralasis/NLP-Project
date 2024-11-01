@@ -3,7 +3,20 @@ import os
 from torch.utils.data import Dataset
 from torchvision.io import read_image
 from filereader import *
+from enum import Enum
 
+class Tag(Enum):
+    B_holder = 1
+    I_holder =  2
+    B_targ = 3
+    I_targ =  4
+    B_exp_Neg = 5
+    I_exp_Neg = 6
+    B_exp_Neu = 7
+    I_exp_Neu = 8
+    B_exp_Pos = 9
+    I_exp_Pos =  10
+    O = 0
 
 
 class SentimentDataset(Dataset):
@@ -29,6 +42,8 @@ class SentimentDataset(Dataset):
             opinions = self.target_transform(opinions)        
         return text, opinions
 
+
+
 def tokenizer_TBD(text):
     return text.split()
 
@@ -51,7 +66,7 @@ def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT
             char_index = end_index + 1
 
         # Default Case
-        tags = ['O'] * len(tokens)  
+        tags = [Tag.O] * len(tokens)  
 
         # BIO labeling 
         #print(tokens)
@@ -70,10 +85,22 @@ def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT
                             break  # Exit after match  
 
                     if index_of_word_to_tag is not None:
+                        
+                        #if opinion["Polarity"] == 'neutral'?:
                         if j == 0:  # B-tag 
-                            tags[index_of_word_to_tag] = "B-expression" # TO-DO add polarity 
+                            if opinion["Polarity"] == 'Positive':
+                                 tags[index_of_word_to_tag] =  Tag.B_exp_Pos #  
+                            elif opinion["Polarity"] == 'Negative':
+                                 tags[index_of_word_to_tag] = Tag.B_exp_Neg #   
+                            else:
+                                tags[index_of_word_to_tag] = Tag.B_exp_Neu#?????????????/
                         else:  # I-tag 
-                            tags[index_of_word_to_tag] = "I-expression" #  TO-DO add polarity 
+                            if opinion["Polarity"] == 'Positive':
+                                 tags[index_of_word_to_tag] = Tag.I_exp_Pos#  
+                            elif opinion["Polarity"] == 'Negative':
+                                 tags[index_of_word_to_tag] = Tag.I_exp_Neg #   
+                            else:
+                                tags[index_of_word_to_tag] = Tag.I_exp_Neg#?????????????/
             #source tagging 
             for i,source_loc in enumerate(opinion["Source"][1]):# for all source instances:
                 source_tokens = tokenizer_TBD(opinion["Source"][0][i]) # get tokens 
@@ -87,9 +114,9 @@ def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT
 
                     if index_of_word_to_tag is not None:
                         if j == 0:  # B-tag 
-                            tags[index_of_word_to_tag] = "B-source"
+                            tags[index_of_word_to_tag] = Tag.B_holder #"B-source"
                         else:  # I-tag 
-                            tags[index_of_word_to_tag] = "I-source"
+                            tags[index_of_word_to_tag] = Tag.I_holder #"I-source"
             #target tagging 
             for i,target_loc in enumerate(opinion["Target"][1]):# for all target instances:
                 target_tokens = tokenizer_TBD(opinion["Target"][0][i]) # get tokens 
@@ -103,9 +130,9 @@ def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT
 
                     if index_of_word_to_tag is not None:
                         if j == 0:  # B-tag 
-                            tags[index_of_word_to_tag] = "B-target"
+                            tags[index_of_word_to_tag] = Tag.B_targ #"B-target"
                         else:  # I-tag 
-                            tags[index_of_word_to_tag] = "I-target"
+                            tags[index_of_word_to_tag] = Tag.I_targ #"I-target"
         
         # Append the results
         tagged_data.append({"tokens": tokens, "tags": tags})
@@ -120,7 +147,7 @@ def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT
 from filereader import load_json_data
 
 # Load and process the data
-data = load_json_data('test.json')  # or 'test2.json'
+data = load_json_data('mytest.json')  # or 'test2.json'
 tagged_data = tag_sentiment_data(data)
 
 # Print a few examples for verification
