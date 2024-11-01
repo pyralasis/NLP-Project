@@ -109,11 +109,6 @@ def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT
         
         # Append the results
         tagged_data.append({"tokens": tokens, "tags": tags})
-
-
-      
- 
-
    # print (tagged_data)
     return tagged_data
 
@@ -124,9 +119,9 @@ data = load_json_data('test.json')  # or 'test2.json'
 tagged_data = tag_sentiment_data(data)
 
 # Print a few examples for verification
-for entry in tagged_data[:7]:  # Adjust index to see more samples
-    tokens = entry['tokens']
-    labels = entry['tags']
-    print("Tokens:", tokens)
-    print("Labels:", labels)
-    print()
+# for entry in tagged_data[:7]:  # Adjust index to see more samples
+#     tokens = entry['tokens']
+#     labels = entry['tags']
+#     print("Tokens:", tokens)
+#     print("Labels:", labels)
+#     print()
