@@ -1,0 +1,44 @@
+Evaluation Goals
+  Assess model performance in identifying:
+
+Opinion holders (sources)
+  Targets
+  Polar expressions with sentiment
+
+Key Metrics
+  Token-Level Metrics
+    Precision = TP / (TP + FP)
+    Recall = TP / (TP + FN)
+    F1 Score = 2 * (precision * recall) / (precision + recall)
+
+Component Evaluation
+  Holders (B-holder, I-holder)
+  Targets (B-targ, I-targ)
+  Expressions:
+    Positive (B-exp-Pos, I-exp-Pos)
+    Negative (B-exp-Neg, I-exp-Neg)
+    Neutral (B-exp-Neu, I-exp-Neu)
+
+Implementation Notes
+  Data Handling
+    Skip special tokens (-100)
+    Handle padding appropriately
+    Maintain token alignment
+  Output
+    {
+        'overall': 
+        {
+            'precision': float,
+            'recall': float,
+            'f1': float
+        },
+        'per_tag': 
+        {
+            'tag_name': 
+            {
+                'precision': float,
+                'recall': float,
+                'f1': float
+            }
+        }
+    }
