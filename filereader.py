@@ -29,7 +29,3 @@ class Opinion:
         self.polar_expression = opinion_data['Polar_expression']
         self.polarity = opinion_data['Polarity']
         self.intensity = opinion_data['Intensity']
-    
-    # MIGHT NEED LATER
-    def to_tuple(self):
-        ...

@@ -21,7 +21,6 @@ class Tag(Enum):
     I_exp_Pos =  10
     O = 0
 
-
 class SentimentDataset(Dataset):
     def __init__(self, url, transform=None, target_transform=None):
         self.transform = transform
@@ -47,7 +46,7 @@ class SentimentDataset(Dataset):
             self.labels.append(torch.tensor(currentTags))
 
         for item in tqdm(self.my_data_points):
-            token_id, attention_mask = text_to_array(item.text)
+            token_id, attention_mask = encode_text(item.text)
             self.token_ids.append(token_id)
             self.attention_masks.append(attention_mask)
 
@@ -56,16 +55,7 @@ class SentimentDataset(Dataset):
         return len(self.my_data_points)
 
     def __getitem__(self, idx):
-        # data_point = self.my_data_points[idx]
-        # text = data_point.text
-        # opinions = data_point.opinions
-        # if self.transform:
-        #     token_ids, attention_masks = self.transform(text)
-        # if self.target_transform:
-        #     labels = self.target_transform(opinions)        
         return self.token_ids[idx], self.attention_masks[idx], self.labels[idx]
-
-
 
 def tokenizer_TBD(text):
     return text.split()
@@ -176,8 +166,7 @@ from filereader import load_json_data
 #     print("Labels:", labels)
 #     print()
 
-
-def text_to_array(text: str):
+def encode_text(text: str):
     tokenizer: BertTokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
 
     encoded_dict = tokenizer.encode_plus(
@@ -193,10 +182,3 @@ def text_to_array(text: str):
     token_ids = encoded_dict['input_ids']
     attention_masks = encoded_dict['attention_mask']
     return token_ids, attention_masks
-
-
-class My_Dataset():
-    def __init__(self, ids, masks, labels):
-        self.ids = ids
-        self.masks = masks
-        self.labels = labels
