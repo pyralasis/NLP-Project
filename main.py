@@ -38,7 +38,7 @@ def main():
         train(train_dataloader, bertModel, optimizer)
 
     test(test_dataloader, bertModel)
-        
+    manual_validation(test_ds, bertModel)
     print("Done!")
 
 if __name__=="__main__":

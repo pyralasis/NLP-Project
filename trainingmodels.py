@@ -1,14 +1,16 @@
 import torch
 import numpy as np
 from transformers import BertForTokenClassification
+from transformers.modeling_outputs import TokenClassifierOutput
+
 
 TOKEN_VECTOR_LENGTH = 96
 MAX_TOKEN_COUNT = 50
 NUMBER_OF_UNIQUE_LABELS = 11
 
-BATCH_SIZE = 32                # Bert paper recommeds batch of 16, or 32
-LEARNING_RATE = 5e-5           # bert paper recommends adamw optimizer with lr of 5e-5, 3e-5, or 2e-5
-TRAINING_EPOCHS = 4            # bert paper recommends epoch of 2, 3, or 4
+BATCH_SIZE = 16                # Bert paper recommends batch of 16, or 32
+LEARNING_RATE = 5e-5           # Bert paper recommends adamw optimizer with lr of 5e-5, 3e-5, or 2e-5
+TRAINING_EPOCHS = 2            # Bert paper recommends epoch of 2, 3, or 4
 
 DEVICE = (
     "cuda"
@@ -23,7 +25,7 @@ def train(dataloader, model: BertForTokenClassification,optimizer):
     size = len(dataloader.dataset) 
     model.train()
     for batch, (token_ids, attention_masks, labels) in enumerate(dataloader):
-        
+
         token_ids = token_ids.squeeze()
         attention_masks = attention_masks.squeeze()
         token_ids, attention_masks, labels = token_ids.to(DEVICE), attention_masks.to(DEVICE), labels.to(DEVICE)
@@ -60,9 +62,8 @@ def test(dataloader, model):
             attention_masks = attention_masks.squeeze()
             token_ids, attention_masks, labels = token_ids.to(DEVICE), attention_masks.to(DEVICE), labels.to(DEVICE)
             output  = model(input_ids=token_ids, 
-                            attention_mask=attention_masks, 
-                            labels=labels)
-            test_loss += output.loss
+                            attention_mask=attention_masks)
+            # test_loss += output.loss
 
             logits = output.logits.detach().cpu().numpy()
             label_ids = labels.to('cpu').numpy()
@@ -75,7 +76,25 @@ def test(dataloader, model):
     print("  Accuracy: {0:.2f}".format(avg_val_accuracy))
 
     # Calculate the average loss over all of the batches.
-    avg_val_loss = test_loss / len(dataloader)
+    # avg_val_loss = test_loss / len(dataloader)
         
-    print("  Validation Loss: {0:.2f}".format(avg_val_loss))
+    # print("  Validation Loss: {0:.2f}".format(avg_val_loss))
     # print(f"Test Error: \n Accuracy: {total_eval_accuracy:>0.1f}%, Avg loss: {test_loss:>8f} \n")
+
+def manual_validation(dataset, model: BertForTokenClassification):
+    num_full_correct = 0
+    num_tokens = 0
+    num_labels_correct = 0
+
+    for i in range(len(dataset.token_ids)):
+        output: TokenClassifierOutput = model.forward(dataset.token_ids[i].to(DEVICE), dataset.attention_masks[i].to(DEVICE))
+        has_label_been_wrong = False
+        for j in range(len(dataset.labels[i])):
+            if dataset.labels[i][j].item() != torch.argmax(output[0][0][j]).item():
+                has_label_been_wrong = True
+            else:
+                num_labels_correct += 1
+            num_tokens += 1
+        if not has_label_been_wrong:
+            num_full_correct += 1
+    print(f"Full Correct: {num_full_correct},Tokens Labeled Correctly: {num_labels_correct}, Tokens Labeled Incorrectly: {num_tokens - num_labels_correct}, Percent Tokens Correctly Labeled: {num_labels_correct / num_tokens}")

@@ -19,8 +19,10 @@ class DataPoint:
         self.sent_id = json_data['sent_id']
         self.text = json_data['text']
         self.opinions = []
+        self.rawOpinions = []
         for current_opinion in json_data['opinions']:
             self.opinions.append(Opinion(current_opinion))
+            self.rawOpinions.append(current_opinion)
 
 class Opinion:
     def __init__(self, opinion_data):
