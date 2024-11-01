@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 from torchvision.io import read_image
 from filereader import *
 from enum import Enum
+from transformers import BertTokenizerFast
 
 class Tag(Enum):
     B_holder = 1
@@ -43,97 +44,104 @@ class SentimentDataset(Dataset):
         return text, opinions
 
 
+# Load pretrained tokenizer
+tokenizer = BertTokenizerFast.from_pretrained("bert-base-cased")
 
+
+#old tokenizer 
 def tokenizer_TBD(text):
+
     return text.split()
 
-def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT 
+ # huggung face tokinizer 
+def tokenizer_custom(text):
+    return  tokenizer(
+            text,
+            return_offsets_mapping=True,
+            truncation=True, # check 
+            padding="max_length",  #True:dynamic padding? adjust?
+            max_length=128,        # adjust?
+            )
+
+
+
+def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT ### TO-DO Refactor to do less tokenizer_custom prob? 
     tagged_data = []
     for entry in data:# every data entry 
         text = entry['text']
         opinions = entry.get('opinions', [])
+  
+        #tokenized = tokenizer(text, return_offsets_mapping=True, truncation=True)
+        tokenized = tokenizer_custom( text )
+        tokens = tokenized.tokens()  # List of tokens
+        token_char_spans = tokenized['offset_mapping']  # Character span for each token  # gets odffests for you  :/ 
 
-        # split in to tokens: TO-DO: FIND BEST TOKENIZER, should ensure all entrys have matching labels? This is discussed in paper
-        tokens = tokenizer_TBD(text)# FOR NOW JUST USEING SPLIT. CHANGE THIS
-        
-        # (start, end) character spans for each token XXX
-        token_char_spans = []
-        char_index = 0
-        for token in tokens:
-            start_index = text.find(token, char_index)
-            end_index = start_index + len(token) - 1
-            token_char_spans.append((start_index, end_index))
-            char_index = end_index + 1
+        # Default Case and Special Values
+        tags = [Tag.O.value] * len(tokens)  
 
-        # Default Case
-        tags = [Tag.O] * len(tokens)  
+        cls_token_index = tokens.index("[CLS]") if "[CLS]" in tokens else None
+        sep_token_index = tokens.index("[SEP]") if "[SEP]" in tokens else None
 
-        # BIO labeling 
-        #print(tokens)
-        
-        # TO-DO: account for overlapping components, repeated words  \??
+        if cls_token_index is not None:
+            tags[cls_token_index] = -100  # Special value for [CLS]
+        if sep_token_index is not None:
+            tags[sep_token_index] = -100  # Special value for [SEP]
+        # Handle Padding Tokens
+        for index, token in enumerate(tokens):
+            if token == "[PAD]":
+                tags[index] = -100  # Assign -100 to [PAD] tokens
+
+
+        # TAG labeling # TO-DO: account for overlapping components, repeated words  \??
         for opinion in opinions:  
+
             #expression tagging 
-            for i,expression_loc in enumerate(opinion["Polar_expression"][1]):# for all expression instances:
-                expression_tokens = tokenizer_TBD(opinion["Polar_expression"][0][i]) # get tokens 
-                start, end = expression_loc.split(":") # get token phrase location
-                for j, token in enumerate(expression_tokens):  # for each expression token
-                    index_of_word_to_tag = None 
-                    for index, (start_index, end_index) in enumerate(token_char_spans):
-                        if start_index >= int(start) and end_index <= int(end) and tokens[index] == token:
-                            index_of_word_to_tag = index
-                            break  # Exit after match  
+            for expression_loc in opinion["Polar_expression"][1]:
+                start, end = map(int, expression_loc.split(":"))
 
-                    if index_of_word_to_tag is not None:
-                        
-                        #if opinion["Polarity"] == 'neutral'?:
-                        if j == 0:  # B-tag 
-                            if opinion["Polarity"] == 'Positive':
-                                 tags[index_of_word_to_tag] =  Tag.B_exp_Pos #  
-                            elif opinion["Polarity"] == 'Negative':
-                                 tags[index_of_word_to_tag] = Tag.B_exp_Neg #   
-                            else:
-                                tags[index_of_word_to_tag] = Tag.B_exp_Neu#?????????????/
-                        else:  # I-tag 
-                            if opinion["Polarity"] == 'Positive':
-                                 tags[index_of_word_to_tag] = Tag.I_exp_Pos#  
-                            elif opinion["Polarity"] == 'Negative':
-                                 tags[index_of_word_to_tag] = Tag.I_exp_Neg #   
-                            else:
-                                tags[index_of_word_to_tag] = Tag.I_exp_Neg#?????????????/
-            #source tagging 
-            for i,source_loc in enumerate(opinion["Source"][1]):# for all source instances:
-                source_tokens = tokenizer_TBD(opinion["Source"][0][i]) # get tokens 
-                start, end = source_loc.split(":") # get token phrase location
-                for j, token in enumerate(source_tokens):  # for each source token
-                    index_of_word_to_tag = None 
-                    for index, (start_index, end_index) in enumerate(token_char_spans):
-                        if start_index >= int(start) and end_index <= int(end) and tokens[index] == token:
-                            index_of_word_to_tag = index
-                            break  # Exit after match
+                for index, (start_index, end_index) in enumerate(token_char_spans):
+                    if start_index >= start and end_index <= end:
+                        if tags[index] == Tag.O.value:  # if not already tagged
+                            if start_index == start:  # B-tag
+                                if opinion["Polarity"] == 'Positive':
+                                    tags[index] = Tag.B_exp_Pos.value
+                                elif opinion["Polarity"] == 'Negative':
+                                    tags[index] = Tag.B_exp_Neg.value
+                                else:
+                                    tags[index] = Tag.B_exp_Neu.value
+                            else:  # I-tag
+                                if opinion["Polarity"] == 'Positive':
+                                    tags[index] = Tag.I_exp_Pos.value
+                                elif opinion["Polarity"] == 'Negative':
+                                    tags[index] = Tag.I_exp_Neg.value
+                                else:
+                                    tags[index] = Tag.I_exp_Neu.value
+             # Source Tagging
+            for source_loc in opinion["Source"][1]:
+                start, end = map(int, source_loc.split(":"))
 
-                    if index_of_word_to_tag is not None:
-                        if j == 0:  # B-tag 
-                            tags[index_of_word_to_tag] = Tag.B_holder #"B-source"
-                        else:  # I-tag 
-                            tags[index_of_word_to_tag] = Tag.I_holder #"I-source"
-            #target tagging 
-            for i,target_loc in enumerate(opinion["Target"][1]):# for all target instances:
-                target_tokens = tokenizer_TBD(opinion["Target"][0][i]) # get tokens 
-                start, end = target_loc.split(":") # get token phrase location
-                for j, token in enumerate(target_tokens):  # for each target token
-                    index_of_word_to_tag = None 
-                    for index, (start_index, end_index) in enumerate(token_char_spans):
-                        if start_index >= int(start) and end_index <= int(end) and tokens[index] == token:
-                            index_of_word_to_tag = index
-                            break  # Exit after match
+                for index, (start_index, end_index) in enumerate(token_char_spans):
+                    if start_index >= start and end_index <= end:
+                        if tags[index] == Tag.O.value:  # if not already tagged
+                            if start_index == start:  # B-tag
+                                tags[index] = Tag.B_holder.value
+                            else:  # I-tag
+                                tags[index] = Tag.I_holder.value
 
-                    if index_of_word_to_tag is not None:
-                        if j == 0:  # B-tag 
-                            tags[index_of_word_to_tag] = Tag.B_targ #"B-target"
-                        else:  # I-tag 
-                            tags[index_of_word_to_tag] = Tag.I_targ #"I-target"
+            # Target Tagging
+            for target_loc in opinion["Target"][1]:
+                start, end = map(int, target_loc.split(":"))
+
+                for index, (start_index, end_index) in enumerate(token_char_spans):
+                    if start_index >= start and end_index <= end:
+                        if tags[index] == Tag.O.value:  # if not already tagged
+                            if start_index == start:  # B-tag
+                                tags[index] = Tag.B_targ.value
+                            else:  # I-tag
+                                tags[index] = Tag.I_targ.value
         
+
+
         # Append the results
         tagged_data.append({"tokens": tokens, "tags": tags})
 
@@ -144,16 +152,19 @@ def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT
    # print (tagged_data)
     return tagged_data
 
-from filereader import load_json_data
 
-# Load and process the data
-data = load_json_data('mytest.json')  # or 'test2.json'
-tagged_data = tag_sentiment_data(data)
+#test code
+if False:
+    from filereader import load_json_data
 
-# Print a few examples for verification
-for entry in tagged_data[:7]:  # Adjust index to see more samples
-    tokens = entry['tokens']
-    labels = entry['tags']
-    print("Tokens:", tokens)
-    print("Labels:", labels)
+    # Load and process the data
+    data = load_json_data('mytest.json')  # or 'test2.json'
+    tagged_data = tag_sentiment_data(data)
+
+    # Print a few examples for verification
+    for entry in tagged_data[:7]:  # Adjust index to see more samples
+        tokens = entry['tokens']
+        labels = entry['tags']
+        print("Tokens:", tokens)
+        print("Labels:", labels)
     print()
