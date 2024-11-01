@@ -1,4 +1,4 @@
-from datasets import SentimentDataset
+from datasets import *
 from filereader import *
 from trainingmodels import *
 from torch.utils.data import DataLoader
@@ -6,8 +6,8 @@ from torch import Tensor, nn
 import torch
 import numpy as np
 from torchvision.transforms import Compose, ToTensor, Lambda
-from transformers import BertTokenizer, BertForSequenceClassification
-
+from transformers import BertTokenizer, BertForSequenceClassification, BertForTokenClassification
+import pickle
 device = (
     "cuda"
     if torch.cuda.is_available()
@@ -21,7 +21,7 @@ def main():
     print(text_to_array("THIS IS A TEST"))
     # The semeval paper used r-bert but we are using bert for now
     # Not sure which bert needs to be used. using this one for now
-    bertModel = BertForSequenceClassification.from_pretrained(
+    bertModel = BertForTokenClassification.from_pretrained(
         "bert-base-uncased", # lower case model
         num_labels = 11, # we want 11 labels for the bio tagging
         output_attentions = False, 
@@ -29,25 +29,18 @@ def main():
     )
     # Use GPU
     bertModel.cuda()
-
-    transform = Compose([            
-        Lambda(text_to_array),
-        ToTensor()
-    ])
+    a, b = text_to_array("THIS IS A TEST")
+    # print(bertModel.forward(a.to(device), b.to(device)))
+    transform = Lambda(text_to_array)
     
-    target_transform = Lambda(lambda opinion_list: torch.tensor([1 if len(opinion_list) > 0 else 0], dtype=torch.float32))
+    target_transform = Compose(Lambda(tag_sentiment_data))
 
-    train_ds = SentimentDataset(
-        'https://raw.githubusercontent.com/jerbarnes/semeval22_structured_sentiment/refs/heads/master/data/opener_en/train.json',
-        transform,
-        target_transform
-    )
 
-    test_ds = SentimentDataset(
-        'https://raw.githubusercontent.com/jerbarnes/semeval22_structured_sentiment/refs/heads/master/data/opener_en/test.json',
-        transform,
-        target_transform
-    )
+    with open("pickled_train_dataset.pkl", 'rb') as f:
+        train_ds = pickle.load(f)
+    
+    with open("pickled_test_dataset.pkl", 'rb') as f:
+        test_ds = pickle.load(f)
 
     # Bert paper recommeds batch of 16, or 32
     train_dataloader = DataLoader(train_ds, batch_size=32, shuffle=True)
@@ -60,22 +53,17 @@ def main():
 
     # bert paper recommends epoch of 2, 3, or 4
     epochs = 4
-    # for t in range(epochs):
-    #     print(f"-------------------------------Epoch {t+1}-------------------------------")
-    #     print(f"Training...")
-    #     train(train_dataloader, bertModel, loss, optimizer)
-    #     print(f"Testing...")
-    #     test(test_dataloader, bertModel, loss)
+    
+    for t in range(epochs):
+        print(f"-------------------------------Epoch {t+1}-------------------------------")
+        print(f"Training...")
+        train(train_dataloader, bertModel, optimizer)
+        test(test_dataloader, bertModel)
+        bertModel.eval()
+        print(f"Custom...")
         
-    #     bertModel.eval()
-    #     print(f"Custom...")
-    #     with torch.no_grad():
-    #         x1 = transform("I walked to the grocery store on Tuesday .").to(device)
-    #         x2 = transform("Comments on my stay at Club Hotel Dolphin").to(device)
-    #         x3 = transform("Room service needs to be improved and we experienced that some of the Linen provided are damaged .").to(device)
-    #         x4 = transform("The staff at the grocery store were nice to me . I enjoyed my shopping trip at the grocery store .").to(device)
-    #         print(bertModel.forward(x1).item(), bertModel.forward(x2).item(), bertModel.forward(x3).item(), bertModel.forward(x4).item())
-    # print("Done!")
+    print("Done!")
+
 
 TOKEN_VECTOR_LENGTH = 96
 MAX_TOKEN_COUNT = 50
@@ -93,43 +81,70 @@ def text_to_array(text: str):
                         truncation = True
                    )
 
-    token_ids = torch.cat(encoded_dict['input_ids'], dim=0)
-    return token_ids
+    token_ids = encoded_dict['input_ids']
+    attention_masks = encoded_dict['attention_mask']
+    return token_ids, attention_masks
 
-def train(dataloader, model, loss_fn, optimizer):
+def train(dataloader, model: BertForTokenClassification,optimizer):
     size = len(dataloader.dataset) 
     model.train()
-    for batch, (X, y) in enumerate(dataloader):
-        X, y = X.to(device), y.to(device)
+    for batch, (token_ids, attention_masks, labels) in enumerate(dataloader):
+        total_train_loss = 0
+        token_ids = token_ids.squeeze()
+        attention_masks = attention_masks.squeeze()
+        token_ids, attention_masks, labels = token_ids.to(device), attention_masks.to(device), labels.to(device)
+        model.zero_grad()  
 
-        # Compute prediction error
-        pred = model(X)
-        loss = loss_fn(pred, y)
+        loss = model(input_ids=token_ids, 
+                    attention_mask=attention_masks, 
+                    labels=labels).loss
+        
+        total_train_loss += loss.item()
 
         # Backpropagation
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
         optimizer.zero_grad()
 
         if batch % 10 == 0:
-            loss, current = loss.item(), (batch + 1) * len(X)
+            loss, current = loss.item(), (batch + 1) * len(token_ids)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
     
-def test(dataloader, model, loss_fn):
-    size = len(dataloader.dataset)
-    num_batches = len(dataloader)
+def flat_accuracy(preds, labels):
+    pred_flat = np.argmax(preds, axis=2).flatten()
+    labels_flat = labels.flatten()
+    return np.sum(pred_flat == labels_flat) / len(labels_flat)
+
+def test(dataloader, model):
     model.eval()
-    test_loss, correct = 0, 0
+    test_loss, correct, total_eval_accuracy = 0, 0, 0
     with torch.no_grad():
-        for X, y in dataloader:
-            X, y = X.to(device), y.to(device)
-            pred = model(X)
-            test_loss += loss_fn(pred, y).item()
-            correct += ((pred > 0.7).float() == y).type(torch.float).sum().item()
-    test_loss /= num_batches
-    correct /= size
-    print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+        for batch, (token_ids, attention_masks, labels) in enumerate(dataloader):
+            token_ids = token_ids.squeeze()
+            attention_masks = attention_masks.squeeze()
+            token_ids, attention_masks, labels = token_ids.to(device), attention_masks.to(device), labels.to(device)
+            output  = model(input_ids=token_ids, 
+                            attention_mask=attention_masks, 
+                            labels=labels)
+            test_loss += output.loss
+
+            logits = output.logits.detach().cpu().numpy()
+            label_ids = labels.to('cpu').numpy()
+
+            # Calculate the accuracy for this batch of test sentences, and
+            # accumulate it over all batches.
+            total_eval_accuracy += flat_accuracy(logits, label_ids)
+        
+    avg_val_accuracy = total_eval_accuracy / len(dataloader)
+    print("  Accuracy: {0:.2f}".format(avg_val_accuracy))
+
+    # Calculate the average loss over all of the batches.
+    avg_val_loss = test_loss / len(dataloader)
+        
+    print("  Validation Loss: {0:.2f}".format(avg_val_loss))
+    # print(f"Test Error: \n Accuracy: {total_eval_accuracy:>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
 
 if __name__=="__main__":

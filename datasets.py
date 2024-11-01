@@ -4,6 +4,9 @@ from torch.utils.data import Dataset
 from torchvision.io import read_image
 from filereader import *
 from enum import Enum
+from transformers import BertTokenizer
+from tqdm import tqdm
+import torch 
 
 class Tag(Enum):
     B_holder = 1
@@ -27,20 +30,40 @@ class SentimentDataset(Dataset):
         data = getFileFromUrl(url)
         self.my_data_points: list[DataPoint] = []
         for item in data:
-            self.my_data_points.append(DataPoint(item))    
+            self.my_data_points.append(DataPoint(item))   
+
+        self.token_ids = []
+        self.attention_masks = []
+        self.labels = []
+        unformatted_labels = tag_sentiment_data(data)
+        for item in unformatted_labels:
+            currentTags = []
+            for i in range(50):
+                if i < len(item["tags"]):
+                    currentTags.append(item["tags"][i].value)
+                else:
+                    currentTags.append(0)
+            
+            self.labels.append(torch.tensor(currentTags))
+
+        for item in tqdm(self.my_data_points):
+            token_id, attention_mask = text_to_array(item.text)
+            self.token_ids.append(token_id)
+            self.attention_masks.append(attention_mask)
+
 
     def __len__(self):
         return len(self.my_data_points)
 
     def __getitem__(self, idx):
-        data_point = self.my_data_points[idx]
-        text = data_point.text
-        opinions = data_point.opinions
-        if self.transform:
-            text = self.transform(text)
-        if self.target_transform:
-            opinions = self.target_transform(opinions)        
-        return text, opinions
+        # data_point = self.my_data_points[idx]
+        # text = data_point.text
+        # opinions = data_point.opinions
+        # if self.transform:
+        #     token_ids, attention_masks = self.transform(text)
+        # if self.target_transform:
+        #     labels = self.target_transform(opinions)        
+        return self.token_ids[idx], self.attention_masks[idx], self.labels[idx]
 
 
 
@@ -135,15 +158,15 @@ def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT
                             tags[index_of_word_to_tag] = Tag.I_targ #"I-target"
         
         # Append the results
-        tagged_data.append({"tokens": tokens, "tags": tags})
+        tagged_data.append({"tokens": tokens, "tags": ([Tag.O] + tags + [Tag.O])})
    # print (tagged_data)
     return tagged_data
 
 from filereader import load_json_data
 
 # Load and process the data
-data = load_json_data('mytest.json')  # or 'test2.json'
-tagged_data = tag_sentiment_data(data)
+# data = load_json_data('mytest.json')  # or 'test2.json'
+# tagged_data = tag_sentiment_data(data)
 
 # Print a few examples for verification
 # for entry in tagged_data[:7]:  # Adjust index to see more samples
@@ -152,3 +175,28 @@ tagged_data = tag_sentiment_data(data)
 #     print("Tokens:", tokens)
 #     print("Labels:", labels)
 #     print()
+
+
+def text_to_array(text: str):
+    tokenizer: BertTokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+
+    encoded_dict = tokenizer.encode_plus(
+                        text,                      
+                        add_special_tokens = True, 
+                        max_length = 50,
+                        padding = 'max_length',
+                        return_attention_mask = True,
+                        return_tensors = 'pt',
+                        truncation = True
+                   )
+
+    token_ids = encoded_dict['input_ids']
+    attention_masks = encoded_dict['attention_mask']
+    return token_ids, attention_masks
+
+
+class My_Dataset():
+    def __init__(self, ids, masks, labels):
+        self.ids = ids
+        self.masks = masks
+        self.labels = labels
