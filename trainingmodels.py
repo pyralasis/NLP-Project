@@ -97,4 +97,4 @@ def manual_validation(dataset, model: BertForTokenClassification):
             num_tokens += 1
         if not has_label_been_wrong:
             num_full_correct += 1
-    print(f"Full Correct: {num_full_correct},Tokens Labeled Correctly: {num_labels_correct}, Tokens Labeled Incorrectly: {num_tokens - num_labels_correct}, Percent Tokens Correctly Labeled: {num_labels_correct / num_tokens}")
+    print(f"Datapoints Fully Correct: {num_full_correct} out of {len(dataset.token_ids)}, Percent datapoints Fully Correct: {num_full_correct/len(dataset.token_ids)}, Tokens Labeled Correctly: {num_labels_correct}, Tokens Labeled Incorrectly: {num_tokens - num_labels_correct}, Percent Tokens Correctly Labeled: {num_labels_correct / num_tokens}")
