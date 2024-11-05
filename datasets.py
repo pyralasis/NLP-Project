@@ -21,6 +21,7 @@ class Tag(Enum):
     I_exp_Neu = 8
     B_exp_Pos = 9
     I_exp_Pos =  10
+    Special = 11
     
     # Special = -100
 class SentimentDataset(Dataset):
@@ -155,8 +156,8 @@ def tag_sentiment_data(datapoint: DataPoint): # PROCESS DATA IN TO BIO FORMAT
                         tags[index_of_word_to_tag] = Tag.B_targ #"B-target"
                     else:  # I-tag 
                         tags[index_of_word_to_tag] = Tag.I_targ #"I-target"
-    tags = [Tag.O] + tags + [Tag.O]
-    outputList = [Tag.O] * MAX_TOKEN_COUNT
+    tags = [Tag.Special] + tags + [Tag.Special]
+    outputList = [Tag.Special] * MAX_TOKEN_COUNT
     if(len(tags) <= MAX_TOKEN_COUNT):
         outputList[0:len(tags)] = tags
     else:

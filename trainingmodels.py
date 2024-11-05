@@ -6,11 +6,11 @@ from transformers.modeling_outputs import TokenClassifierOutput
 
 TOKEN_VECTOR_LENGTH = 96
 MAX_TOKEN_COUNT = 50
-NUMBER_OF_UNIQUE_LABELS = 11
+NUMBER_OF_UNIQUE_LABELS = 12
 
-BATCH_SIZE = 16                # Bert paper recommends batch of 16, or 32
-LEARNING_RATE = 5e-5           # Bert paper recommends adamw optimizer with lr of 5e-5, 3e-5, or 2e-5
-TRAINING_EPOCHS = 2            # Bert paper recommends epoch of 2, 3, or 4
+BATCH_SIZE = 32                # Bert paper recommends batch of 16, or 32
+LEARNING_RATE = 3e-5           # Bert paper recommends adamw optimizer with lr of 5e-5, 3e-5, or 2e-5
+TRAINING_EPOCHS = 3            # Bert paper recommends epoch of 2, 3, or 4
 
 DEVICE = (
     "cuda"
@@ -92,9 +92,10 @@ def manual_validation(dataset, model: BertForTokenClassification):
         for j in range(len(dataset.labels[i])):
             if dataset.labels[i][j].item() != torch.argmax(output[0][0][j]).item():
                 has_label_been_wrong = True
-            else:
+            elif dataset.labels[i][j].item() != 11:
                 num_labels_correct += 1
-            num_tokens += 1
+            if dataset.labels[i][j].item() != 11:
+                num_tokens += 1
         if not has_label_been_wrong:
             num_full_correct += 1
     print(f"Datapoints Fully Correct: {num_full_correct} out of {len(dataset.token_ids)}, Percent datapoints Fully Correct: {num_full_correct/len(dataset.token_ids)}, Tokens Labeled Correctly: {num_labels_correct}, Tokens Labeled Incorrectly: {num_tokens - num_labels_correct}, Percent Tokens Correctly Labeled: {num_labels_correct / num_tokens}")
