@@ -6,6 +6,7 @@ from filereader import *
 from enum import Enum
 from transformers import BertTokenizerFast
 
+
 class Tag(Enum):
     B_holder = 1
     I_holder =  2
@@ -47,7 +48,6 @@ class SentimentDataset(Dataset):
 # Load pretrained tokenizer
 tokenizer = BertTokenizerFast.from_pretrained("bert-base-cased")
 
-
 #old tokenizer 
 def tokenizer_TBD(text):
 
@@ -65,7 +65,7 @@ def tokenizer_custom(text):
 
 
 
-def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT ### TO-DO Refactor to do less tokenizer_custom prob? 
+def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT ### TO-DO ? 
     tagged_data = []
     for entry in data:# every data entry 
         text = entry['text']
@@ -92,7 +92,7 @@ def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT ### TO-DO Refactor
                 tags[index] = -100  # Assign -100 to [PAD] tokens
 
 
-        # TAG labeling # TO-DO: account for overlapping components, repeated words  \??
+        # TAG labeling #
         for opinion in opinions:  
 
             #expression tagging 
