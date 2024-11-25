@@ -28,35 +28,43 @@ from sklearn.metrics import classification_report, precision_recall_fscore_suppo
 
 
 tags = ['B-holder', 'I-holder','B-targ','I-targ','B-exp-Neg','I-exp-Neg','B-exp-Neu', 'I-exp-Neu', 'B-exp-Pos', 'I-exp-Pos' ,'O' ]
-def compute_metrics(p): 
-    predictions, labels = p
-    predictions = np.argmax(predictions, axis=2)
 
-    true_predictions = [
-        [tags[p] for (p, l) in zip(prediction, label) if l != -100]
-        for prediction, label in zip(predictions, labels)
-    ]
-    true_labels = [
-        [tags[l] for (p, l) in zip(prediction, label) if l != -100]
-        for prediction, label in zip(predictions, labels)
-    ]
+id2label={1:'B-holder', 2:'I-holder', 3:'B-targ', 4:'I-targ', 5:'B-exp-Neg', 6:'I-exp-Neg', 7:'B-exp-Neu', 8:'I-exp-Neu', 9:'B-exp-Pos', 10:'I-exp-Pos', 0:'O'}
+label2id={'B-holder':1, 'I-holder':2,'B-targ':3, 'I-targ':4, 'B-exp-Neg':5, 'I-exp-Neg':6, 'B-exp-Neu':7, 'I-exp-Neu':8, 'B-exp-Pos':9, 'I-exp-Pos':10, 'O':0}
 
-    results = seqeval.compute(predictions=true_predictions, references=true_labels)
-    print("\n\nSeqeval Results:", results)
-    token_level_f1 = {}
-    for tag in tags:
-        if tag in results:
-            token_level_f1[tag] = results[tag]["f1"]
 
+def compute_metrics(pred):
+    predictions, labels = pred
+    predictions = np.argmax(predictions, axis=2)  # Convert logits to predicted labels
+
+    # Flatten predictions and labels, and filter out ignored tokens (-100)
+    true_labels = []
+    true_predictions = []
+    for label, prediction in zip(labels, predictions):
+        for l, p in zip(label, prediction):
+            if l != -100:  # Ignore special tokens
+                true_labels.append(l)
+                true_predictions.append(p)
+
+    # Compute class-level F1 scores
+    label_names = [v for k, v in sorted(id2label.items())]
+
+    # Classification report
+    report = classification_report(true_labels, true_predictions, target_names=label_names, zero_division=0, output_dict=True)
+
+    # Extract relevant F1 scores
     metrics = {
-        "precision": results["overall_precision"],
-        "recall": results["overall_recall"],
-        "f1": results["overall_f1"],
-        "accuracy": results["overall_accuracy"]    
-        }
-    metrics.update({f"f1_{tag}": token_level_f1.get(tag, 0) for tag in tags})
+        "Holder F1": (report['B-holder']['f1-score'] + report['I-holder']['f1-score']) / 2,
+        "Target F1": (report['B-targ']['f1-score'] + report['I-targ']['f1-score']) / 2,
+        "Exp. F1": (
+            report['B-exp-Pos']['f1-score'] + report['I-exp-Pos']['f1-score'] +
+            report['B-exp-Neg']['f1-score'] + report['I-exp-Neg']['f1-score'] +
+            report['B-exp-Neu']['f1-score'] + report['I-exp-Neu']['f1-score']
+        ) / 6,
+        "Total F1": precision_recall_fscore_support(true_labels, true_predictions, average='weighted')[2]
+    }
 
-    return metrics 
+    return metrics
 
 #CHECK THIS :
 #this function is used after data is seperated in to tokens and tags in datasets_local 
@@ -102,17 +110,13 @@ def preprocess(examples):
 
     return tokenized_inputs
 
-id2label={1:'B-holder', 2:'I-holder', 3:'B-targ', 4:'I-targ', 5:'B-exp-Neg', 6:'I-exp-Neg', 7:'B-exp-Neu', 8:'I-exp-Neu', 9:'B-exp-Pos', 10:'I-exp-Pos', 0:'O'}
-label2id={'B-holder':1, 'I-holder':2,'B-targ':3, 'I-targ':4, 'B-exp-Neg':5, 'I-exp-Neg':6, 'B-exp-Neu':7, 'I-exp-Neu':8, 'B-exp-Pos':9, 'I-exp-Pos':10, 'O':0}
-
-
 ###############################################################################
 #CHOSE DATASET BY NAME; should be in one of the follwing:
 #                       -/DATA/test_data/{DATASET}.json or 
 #                       -/DATA/pickle_data/{DATASET}_processed_dataset.pkl
-DATASET = "WIP_merged_english_data_WIP"#WIP_merged_english_data_WIP #smalltoken #medium_test
+DATASET = "WIP_merged_english_data_WIP"#WIP_merged_english_data_WIP #smalltoken #medium_test #med_large_test
 #CHOSE MODEL SAVE NAME
-MODEL_NAME = "bert-token-classification"
+MODEL_NAME = "bert-token-classification"    #bert-token-classification"#distilbert-base-cased
 ###############################################################################
 # folder for saving results
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -206,7 +210,7 @@ training_args = TrainingArguments(
     output_dir="./results",
     eval_strategy="epoch",
     learning_rate=1e-5,
-    per_device_train_batch_size=10,#ADJUST for GPU UTILIZTION 
+    per_device_train_batch_size=10,#
     per_device_eval_batch_size=10,
     num_train_epochs=3,
     weight_decay=0.01,
