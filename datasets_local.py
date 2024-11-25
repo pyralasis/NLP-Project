@@ -20,7 +20,6 @@ class Tag(Enum):
     I_exp_Pos =  10
     O = 0
 
-
 class SentimentDataset(Dataset):
     def __init__(self, url, transform=None, target_transform=None):
         self.transform = transform
@@ -60,7 +59,7 @@ def tokenizer_custom(text):
             return_offsets_mapping=True,
             truncation=True, # check 
             padding="max_length",  #True:dynamic padding? adjust?
-            max_length=128,        # adjust?
+           # max_length=128,        # adjust?
             )
 
 
@@ -89,7 +88,7 @@ def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT ### TO-DO ?
         # Handle Padding Tokens
         for index, token in enumerate(tokens):
             if token == "[PAD]":
-                tags[index] = -100  # Assign -100 to [PAD] tokens
+                tags[index] = -101  # keep [PAD] tokens
 
 
         # TAG labeling #
@@ -140,16 +139,19 @@ def tag_sentiment_data(data): # PROCESS DATA IN TO BIO FORMAT ### TO-DO ?
                             else:  # I-tag
                                 tags[index] = Tag.I_targ.value
         
-
+        #TEMP change above lgoic to do this: 
+        # Convert numeric tags to strings using id2label
+        #id2label={-100:-100, 1:'B-holder', 2:'I-holder', 3:'B-targ', 4:'I-targ', 5:'B-exp-Neg', 6:'I-exp-Neg', 7:'B-exp-Neu', 8:'I-exp-Neu', 9:'B-exp-Pos', 10:'I-exp-Pos', 0:'O'}
+        #string_tags = [id2label[tag] for tag in tags]
 
         # Append the results
-        tagged_data.append({"tokens": tokens, "tags": tags})
+        tagged_data.append({"tokens": tokens, "tags": tags})#string_tags
 
 
       
  
 
-   # print (tagged_data)
+    #print (tagged_data)
     return tagged_data
 
 
@@ -158,13 +160,25 @@ if False:
     from filereader import load_json_data
 
     # Load and process the data
-    data = load_json_data('mytest.json')  # or 'test2.json'
+    data = load_json_data(f"./DATA/test_data/smalltoken.json")  # or 'test2.json'
     tagged_data = tag_sentiment_data(data)
 
-    # Print a few examples for verification
-    for entry in tagged_data[:7]:  # Adjust index to see more samples
+    # Extract and print results before the trailing -100 values
+    for entry in tagged_data[:5]:  # Adjust slice to see more examples
         tokens = entry['tokens']
         labels = entry['tags']
-        print("Tokens:", tokens)
-        print("Labels:", labels)
-    print()
+
+        # Find the point before all remaining labels are -100
+        last_valid_idx = len(labels) - 1
+        for i in range(len(labels) - 1, -1, -1):
+            if labels[i] != -100:
+                last_valid_idx = i
+                break
+
+        # Slice the tokens and labels up to the last valid index
+        filtered_tokens = tokens[:last_valid_idx + 1]
+        filtered_labels = labels[:last_valid_idx + 1]
+
+        # Print the filtered results
+        print("Filtered Tokens:", filtered_tokens)
+        print("Filtered Labels:", filtered_labels)
