@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.colors as mcolors
 
 
-def plot_class_distribution(dataset, id2label):
+def plot_class_distribution(dataset, id2label, tarin_or_test):
     """
     Plots the class distribution in a dataset with labels on each bar, no spacing
     between B-X and I-X bars, and distinct colors for B and I tags.
@@ -67,7 +67,11 @@ def plot_class_distribution(dataset, id2label):
     # Adjust axis
     plt.xlabel("Classes")
     plt.ylabel("Frequency")
-    plt.title("Class Distribution in Dataset")
+    plt.title(f"Class Distribution in {tarin_or_test} Dataset")
     plt.xticks(bar_positions, sorted_classes, rotation=45, ha="right")
     plt.tight_layout()
     plt.show()
+
+
+
+
