@@ -13,10 +13,15 @@ import torch
 from datasets import Dataset
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score, confusion_matrix, ConfusionMatrixDisplay,classification_report
 from transformers import BertTokenizerFast,BertForTokenClassification,AutoTokenizer,Trainer, TrainingArguments,DataCollatorForTokenClassification
-# pip install tensorflow transformers
+from torch.utils.data import DataLoader
+        # pip install tensorflow transformers
 
 # eval 
 import evaluate
+import matplotlib.pyplot as plt
+#from sklearn.metrics import accuracy_score, classification_report, precision_recall_fscore_support
+#from seqeval.metrics import classification_report as seqeval_report
+#from seqeval.metrics import precision_score, recall_score, f1_score
 # pip install transformers datasets evaluate seqeval
 
 #local
@@ -27,7 +32,7 @@ from visualize_dataset import plot_class_distribution
 #CHOSE DATASET BY NAME; should be in one of the follwing:
 #                       -/DATA/test_data/{DATASET}.json or 
 #                       -/DATA/pickle_data/{DATASET}_processed_dataset.pkl
-DATASET = "medium_test" #WIP_merged_english_data_WIP #smalltoken #medium_test #med_large_test
+DATASET = "WIP_merged_english_data_WIP" #WIP_merged_english_data_WIP #smalltoken #medium_test #med_large_test #test
 #CHOSE MODEL
 MODEL_NAME = "bert-token-classification"    #bert-token-classification"
 ###############################################################################
@@ -35,6 +40,9 @@ MODEL_NAME = "bert-token-classification"    #bert-token-classification"
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 MODEL_DIR = f"./saved_models/{DATASET}_x_{MODEL_NAME}_x{TIMESTAMP}"
 os.makedirs(MODEL_DIR, exist_ok=True)
+# Define the log file path
+log_file = os.path.join(MODEL_DIR, "metrics_log.json")
+
 #
 tokenizer = BertTokenizerFast.from_pretrained("bert-base-cased")
 # move to GPU or CPU
@@ -47,9 +55,9 @@ id2label={1:'B-holder', 2:'I-holder', 3:'B-targ', 4:'I-targ', 5:'B-exp-Neg', 6:'
 label2id={'B-holder':1, 'I-holder':2,'B-targ':3, 'I-targ':4, 'B-exp-Neg':5, 'I-exp-Neg':6, 'B-exp-Neu':7, 'I-exp-Neu':8, 'B-exp-Pos':9, 'I-exp-Pos':10, 'O':0}
 
 seqeval = evaluate.load("seqeval")
-tokenizer = BertTokenizerFast.from_pretrained("bert-base-cased")
+tokenizer = BertTokenizerFast.from_pretrained("bert-base-cased")#?
 
-
+#ompute accuracy, precision, recall, and F1 scores for token-level and aggregated metrics.
 def compute_metrics(pred):
     predictions, labels = pred
     predictions = np.argmax(predictions, axis=2)  # Convert logits to predicted labels
@@ -63,46 +71,113 @@ def compute_metrics(pred):
                 true_labels.append(l)
                 true_predictions.append(p)
 
-    # Compute class-level F1 scores
+    # Calculate overall metrics
+    accuracy = accuracy_score(true_labels, true_predictions)
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        true_labels, true_predictions, average="weighted", zero_division=0
+    )
+
+    # Classification report per class
     label_names = [v for k, v in sorted(id2label.items())]
+    report = classification_report(
+        true_labels, true_predictions, target_names=label_names, zero_division=0, output_dict=True
+    )
 
-    # Classification report
-    report = classification_report(true_labels, true_predictions, target_names=label_names, zero_division=0, output_dict=True)
-
-    # Extract relevant F1 scores# is this correct way to eval
-    # Holder F1-scores
+    # Extract F1 scores for each class and aggregated metrics
     metrics = {
-    "B-holder F1": report['B-holder']['f1-score'],
-    "I-holder F1": report['I-holder']['f1-score'],
-    
-    # Target F1-scores
-    "B-targ F1": report['B-targ']['f1-score'],
-    "I-targ F1": report['I-targ']['f1-score'],
-
-    # Expression F1-scores
-    "B-exp-Pos F1": report['B-exp-Pos']['f1-score'],
-    "I-exp-Pos F1": report['I-exp-Pos']['f1-score'],
-
-    "B-exp-Neg F1": report['B-exp-Neg']['f1-score'],
-    "I-exp-Neg F1": report['I-exp-Neg']['f1-score'],
-
-    "B-exp-Neu F1": report['B-exp-Neu']['f1-score'],
-    "I-exp-Neu F1": report['I-exp-Neu']['f1-score'],
-
-    # Aggregated F1-scores
-    "Holder F1 Total": (report['B-holder']['f1-score'] + report['I-holder']['f1-score']) / 2,
-    "Target F1 Total": (report['B-targ']['f1-score'] + report['I-targ']['f1-score']) / 2,
-    "Exp. F1 Total": (
-        report['B-exp-Pos']['f1-score'] + report['I-exp-Pos']['f1-score'] +
-        report['B-exp-Neg']['f1-score'] + report['I-exp-Neg']['f1-score'] +
-        report['B-exp-Neu']['f1-score'] + report['I-exp-Neu']['f1-score']
-    ) / 6,
-
-    # Overall weighted F1-score
-    "Total F1": precision_recall_fscore_support(true_labels, true_predictions, average='weighted')[2]
-}
+        "accuracy": accuracy,  # Include accuracy
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "B-holder F1": report.get("B-holder", {}).get("f1-score", 0.0),
+        "I-holder F1": report.get("I-holder", {}).get("f1-score", 0.0),
+        "B-targ F1": report.get("B-targ", {}).get("f1-score", 0.0),
+        "I-targ F1": report.get("I-targ", {}).get("f1-score", 0.0),
+        "B-exp-Neg F1": report.get("B-exp-Neg", {}).get("f1-score", 0.0),
+        "I-exp-Neg F1": report.get("I-exp-Neg", {}).get("f1-score", 0.0),
+        "B-exp-Neu F1": report.get("B-exp-Neu", {}).get("f1-score", 0.0),
+        "I-exp-Neu F1": report.get("I-exp-Neu", {}).get("f1-score", 0.0),
+        "B-exp-Pos F1": report.get("B-exp-Pos", {}).get("f1-score", 0.0),
+        "I-exp-Pos F1": report.get("I-exp-Pos", {}).get("f1-score", 0.0),
+        "Holder F1 Total": (report.get("B-holder", {}).get("f1-score", 0.0) + report.get("I-holder", {}).get("f1-score", 0.0)) / 2,
+        "Target F1 Total": (report.get("B-targ", {}).get("f1-score", 0.0) + report.get("I-targ", {}).get("f1-score", 0.0)) / 2,
+        "Exp. F1 Total": (
+            report.get("B-exp-Pos", {}).get("f1-score", 0.0) +
+            report.get("I-exp-Pos", {}).get("f1-score", 0.0) +
+            report.get("B-exp-Neg", {}).get("f1-score", 0.0) +
+            report.get("I-exp-Neg", {}).get("f1-score", 0.0) +
+            report.get("B-exp-Neu", {}).get("f1-score", 0.0) +
+            report.get("I-exp-Neu", {}).get("f1-score", 0.0)
+        ) / 6,
+    }
 
     return metrics
+
+
+
+# Trainer callback for logging
+from transformers import TrainerCallback
+
+class LoggingCallback(TrainerCallback):
+    
+    # logging callback to log metrics at the end of each evaluation.
+    
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        if metrics:
+            epoch = int(state.epoch) if state.epoch is not None else "unknown"
+            print(f"Metrics at epoch {epoch}: {metrics}")  # Debugging output
+            log_metrics(epoch, metrics, log_file)
+            print(f"Epoch {epoch} metrics logged.")
+
+    def on_init_end(self, args, state, control, **kwargs):
+        print("Trainer initialization complete.")
+
+class LossTrackingCallback(TrainerCallback):
+    def __init__(self):
+        self.epoch_loss = []
+
+    def on_epoch_end(self, args, state, control, **kwargs):
+        # Save training and evaluation losses at the end of each epoch
+        if state.log_history:
+            for log in state.log_history:
+                if "loss" in log or "eval_loss" in log:
+                    self.epoch_loss.append(log)
+                    print(f"Epoch {state.epoch}: {log}")
+
+
+#Logs metrics to a file for each epoch.
+def log_metrics(epoch, metrics, log_file):
+    print(f"Logging metrics for epoch {epoch}: {metrics}")  # Debugging
+    log_entry = {
+        "epoch": epoch,
+        "overall_metrics": {
+            "accuracy": metrics.get("accuracy"),
+            "precision": metrics.get("precision"),
+            "recall": metrics.get("recall"),
+            "f1": metrics.get("f1"),
+        },
+        "aggregated_metrics": {
+            "Holder F1 Total": metrics.get("Holder F1 Total"),
+            "Target F1 Total": metrics.get("Target F1 Total"),
+            "Exp. F1 Total": metrics.get("Exp. F1 Total"),
+        },
+        "Class F1 Scores": {
+            "B-holder F1": metrics.get("B-holder F1"),
+            "I-holder F1": metrics.get("I-holder F1"),
+            "B-targ F1": metrics.get("B-targ F1"),
+            "I-targ F1": metrics.get("I-targ F1"),
+            "B-exp-Pos F1": metrics.get("B-exp-Pos F1"),
+            "I-exp-Pos F1": metrics.get("I-exp-Pos F1"),
+            "B-exp-Neg F1": metrics.get("B-exp-Neg F1"),
+            "I-exp-Neg F1": metrics.get("I-exp-Neg F1"),
+            "B-exp-Neu F1": metrics.get("B-exp-Neu F1"),
+            "I-exp-Neu F1": metrics.get("I-exp-Neu F1"),
+        }
+    }
+    with open(log_file, "a") as f:
+        json.dump(log_entry, f, indent=4)
+        f.write("\n")
+
 
 #CHECK THIS :
 #this function is used after data is seperated in to tokens and tags in datasets_local 
@@ -114,6 +189,7 @@ def preprocess(examples):
         truncation=True,
         padding="max_length",  # Ensure consistent padding
         return_offsets_mapping=True
+
     )
 
     labels = []
@@ -182,7 +258,7 @@ def main():
     """
     Main function for training and evaluation.
     """
-    
+
     #load  model and tokenizer TO-DO: evalaute existing model? 
     use_pretrained_model = False
     if use_pretrained_model:
@@ -193,6 +269,7 @@ def main():
         
     print(f"Using device: {device}")
     model.to(device)
+    
 
     #if pickled dataset exists #else: process data 
     processed_dataset = load_or_process_data()
@@ -204,23 +281,27 @@ def main():
     evaluation_dataset = split["test"] 
 
     #check for imbalnce 
-    if(True):
+    if(False):
         plot_class_distribution(training_dataset, id2label, "training")
         plot_class_distribution(evaluation_dataset, id2label, "testing")
-    plot_class_distribution(processed_dataset, id2label, "total")
+        plot_class_distribution(processed_dataset, id2label, "total")
+
+     
+    collator = DataCollatorForTokenClassification(tokenizer)
 
     # ALSO SPLIT FOR FINAL EVAL DATA? 
 
-
+   
+       
     #  training args 
     training_args = TrainingArguments(
         output_dir="./results",
         eval_strategy="epoch",
         learning_rate=1e-5,
-        per_device_train_batch_size=10,#
-        per_device_eval_batch_size=10,
-        num_train_epochs=3,
-        weight_decay=0.01,
+        per_device_train_batch_size=16,#
+        per_device_eval_batch_size=16,
+        num_train_epochs=10,
+        #weight_decay=0.01,
         #warmup_steps? 
         logging_dir="./logs",
         #armu
@@ -232,8 +313,8 @@ def main():
     )
     # Save hyperparameters
     hyperparams = {
-        "learning_rate": training_args.learning_rate,
         "num_train_epochs": training_args.num_train_epochs,
+        "learning_rate": training_args.learning_rate,
         "per_device_train_batch_size": training_args.per_device_train_batch_size,
         "weight_decay": training_args.weight_decay,
         "fp16": training_args.fp16,
@@ -242,7 +323,8 @@ def main():
         json.dump(hyperparams, f, indent=4)
 
     # trainer
-    collator = DataCollatorForTokenClassification(tokenizer)
+    loss_tracker = LossTrackingCallback()
+
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -250,7 +332,8 @@ def main():
         eval_dataset=evaluation_dataset,  # Use a separate eval set in production
         data_collator=collator, # nsure uniform sequence length i
         processing_class=tokenizer,#?
-        compute_metrics=compute_metrics
+        compute_metrics=compute_metrics,
+        callbacks=[LoggingCallback(), loss_tracker]  # Add custom logging callback
 
     )
 
@@ -259,7 +342,8 @@ def main():
 
     # evaluation 
     results = trainer.evaluate()
-    print("Evaluation Results:", results)
+    #print("Evaluation Results:", results)
+    print("Epoch Losses:", loss_tracker.epoch_loss)
 
     # Confusion matrix for error analysis[need to create seperate data set?]
     predictions = trainer.predict(evaluation_dataset)
@@ -270,8 +354,12 @@ def main():
     ConfusionMatrixDisplay(cm).plot()
 
     # save evaluation metrics
-    with open(os.path.join(MODEL_DIR, "metrics.json"), "w") as f:
-        json.dump(results , f, indent=4)
+    save_results = input("Would you like to save the metrics? (y/n): ").strip().lower()
+    if save_results:
+        with open(os.path.join(MODEL_DIR, "metrics.json"), "w") as f:
+            json.dump(results , f, indent=4)
+        with open(os.path.join(MODEL_DIR, "epoch_losses.json"), "w") as f:
+            json.dump(loss_tracker.epoch_loss, f, indent=4)
 
         
     save_model = input("Would you like to save the model and tokenizer? (y/n): ").strip().lower()
@@ -283,7 +371,7 @@ def main():
     else:
         print("Model and tokenizer were not saved.")
 
-    # Run evaluation
+
 
 if __name__ == "__main__":
     main()
