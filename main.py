@@ -69,8 +69,8 @@ def main():
         print(f"Training...")
         trainRelations(train_dataloader, bertModelRelations, optimizer)
 
-    testrel(test_dataloader, bertModel)
-    manual_validation(test_ds_rel, bertModel)
+    testrel(test_dataloader, bertModelRelations)
+    manual_validation(test_ds_rel, bertModelRelations)
     print("Done!")
 
 

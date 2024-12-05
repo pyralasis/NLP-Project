@@ -50,7 +50,7 @@ def train(dataloader, model: BertForTokenClassification,optimizer):
 
     
 def flat_accuracy(preds, labels):
-    pred_flat = np.argmax(preds, axis=2).flatten()
+    pred_flat = np.argmax(preds, axis=1).flatten()
     labels_flat = labels.flatten()
     return np.sum(pred_flat == labels_flat) / len(labels_flat)
 
@@ -136,6 +136,8 @@ def trainRelations(dataloader, model: BertForTokenClassification,optimizer):
 def testrel(dataloader, model):
     model.eval()
     test_loss, correct, total_eval_accuracy = 0, 0, 0
+    all_labels = []
+    all_preds = []
     with torch.no_grad():
         for batch, (token_ids, attention_masks, labels) in enumerate(dataloader):
             token_ids = token_ids.squeeze()
@@ -148,9 +150,18 @@ def testrel(dataloader, model):
             logits = output.logits.detach().cpu().numpy()
             label_ids = labels.to('cpu').numpy()
 
+            for logit in output.logits.detach().cpu():
+                all_preds.append(torch.argmax(logit).reshape(1))
+
+            for label in labels.to('cpu'):
+                all_labels.append(label)
+
             # Calculate the accuracy for this batch of test sentences, and
             # accumulate it over all batches.
-            # total_eval_accuracy += flat_accuracy(logits, label_ids)
+            total_eval_accuracy += flat_accuracy(logits, label_ids)
         
-    # avg_val_accuracy = total_eval_accuracy / len(dataloader)
-    # print("  Accuracy: {0:.2f}".format(avg_val_accuracy))
+    avg_val_accuracy = total_eval_accuracy / len(dataloader)
+    print("  Accuracy: {0:.2f}".format(avg_val_accuracy))
+    from torcheval.metrics.functional import binary_f1_score
+    f1_scorea = binary_f1_score(torch.cat(all_preds), torch.cat(all_labels))
+    print(f1_scorea)
