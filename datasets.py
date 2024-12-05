@@ -1,4 +1,6 @@
+from itertools import product
 import os
+from typing import Any
 # import pandas as pd
 from torch.utils.data import Dataset
 from torchvision.io import read_image
@@ -8,6 +10,8 @@ from transformers import BertTokenizer, BertTokenizerFast
 from tqdm import tqdm
 import torch 
 from trainingmodels import MAX_TOKEN_COUNT
+import re
+
 
 class Tag(Enum):
     O = 0
@@ -31,12 +35,13 @@ class SentimentDataset(Dataset):
     
         data = getFileFromUrl(url)
         self.my_data_points: list[DataPoint] = []
+
         for item in data:
-            self.my_data_points.append(DataPoint(item))   
+            self.my_data_points.append(DataPoint(item)) 
 
         self.token_ids = []
         self.attention_masks = []
-        self.labels = []
+        self.labels = []        
 
         for item in tqdm(self.my_data_points):
             token_id, attention_mask = self.encode_text(item.text)
@@ -163,3 +168,154 @@ def tag_sentiment_data(datapoint: DataPoint): # PROCESS DATA IN TO BIO FORMAT
     else:
         outputList = tags[0:MAX_TOKEN_COUNT]
     return outputList
+
+
+class RelationsDataset(Dataset):
+    def __init__(self, url, transform=None, target_transform=None):
+        self.transform = transform
+        self.target_transform = target_transform
+    
+        data = getFileFromUrl(url)
+        self.my_data_points: list[DataPoint] = []
+
+        for item in data:
+            self.my_data_points.append(DataPoint(item)) 
+
+        self.token_ids = []
+        self.attention_masks = []
+        self.labels = []
+
+        self.truepairs = []
+        self.falsepairs = []
+
+        def createPair(expression, other, placetext, pairslist):
+            if other != [[], []]:
+                otherindex = other[1][0].split(':')
+                otherindex = list(map(int, otherindex))
+                newstring = text[0:otherindex[0]] + placetext + " " + other[0][0] + " " + placetext + text[otherindex[1]:]
+                difference = len(newstring) - len(text)
+
+                expressionindex = expression[1][0].split(':')
+                expressionindex = list(map(int, expressionindex))
+                if otherindex[0] < expressionindex[0]:
+                    first = expressionindex[0] + difference
+                    second = expressionindex[1] + difference
+                    expressionindex = [first, second]
+                
+                newstringtwo = newstring[0:expressionindex[0]] + "[expression] " + expression[0][0] + " [expression]" + newstring[expressionindex[1]:]
+                pairslist.append(newstringtwo)
+
+        for item in tqdm(self.my_data_points):
+
+            def get_update_opinion(d: dict, val: Any):
+                if val != [[], []]:
+                    txt = val[0][0]
+                    idx = list(map(int, val[1][0].split(":")))
+                    d[txt] = idx
+                    return txt
+
+                return None
+
+
+            holders = {}
+            targets = {}
+            expressions = {}
+            
+            valid = set[tuple[str, str]]()
+
+            opinion: Opinion
+            for opinion in item.opinions:
+                hldr = get_update_opinion(holders, opinion.source)
+                tgt = get_update_opinion(targets, opinion.target)
+                exp = get_update_opinion(expressions, opinion.polar_expression)
+
+                if exp is not None:
+                    if hldr is not None:
+                        valid.add((exp, hldr))
+                    if tgt is not None:
+                        valid.add((exp, tgt))
+
+            for expression, exp_idx in expressions.items():
+                exp_str = item.text[0:exp_idx[0]] + "[expression] " + expression + " [expression]" + item.text[exp_idx[1]:]
+                str_len_incr = len(exp_str) - len(item.text)
+
+                def create_pair(text: str, idx: list[int], holder: bool):
+                    start = idx[0]
+                    end = idx[1]
+
+                    if idx[0] >= exp_idx[1]:
+                        start += str_len_incr
+                        end += str_len_incr
+
+                    if holder:
+                        new_str = exp_str[0:start] + "[holder] " + text + " [holder]" + exp_str[end:]
+                    else:
+                        new_str = exp_str[0:start] + "[target] " + text + " [target]" + exp_str[end:]
+
+                    if (expression, text) in valid:
+                        self.truepairs.append(new_str)
+                    else:
+                        self.falsepairs.append(new_str)
+
+
+                for holder, hold_idx in holders.items():
+                    create_pair(holder, hold_idx, True)
+
+                for target, tgt_idx in targets.items():
+                    create_pair(target, tgt_idx, False)
+
+        # for item in tqdm(self.my_data_points):
+        #     currentOpinion: Opinion
+        #     for i, currentOpinion in enumerate(item.opinions):
+        #         text = item.text
+        #         expression = currentOpinion.polar_expression
+        #         holder = currentOpinion.source
+        #         target = currentOpinion.target
+
+        #         createPair(expression, holder, "[holder]", self.truepairs)
+        #         createPair(expression, target, "[target]", self.truepairs)
+        #         otherOpinions = item.opinions[:i] + item.opinions[i+1:]
+        #         for otherOpinion in otherOpinions:
+        #             otherholder = otherOpinion.source
+        #             othertarget = otherOpinion.target
+
+        #             createPair(expression, otherholder, "[holder]", self.falsepairs)
+        #             createPair(expression, othertarget, "[target]", self.falsepairs)
+
+        for pair in tqdm(self.truepairs):
+            token_id, attention_mask = self.encode_text(pair)
+            self.token_ids.append(token_id)
+            self.attention_masks.append(attention_mask)
+            self.labels.append(torch.tensor([1]))
+        
+        for pair in tqdm(self.falsepairs):
+            token_id, attention_mask = self.encode_text(pair)
+            self.token_ids.append(token_id)
+            self.attention_masks.append(attention_mask)
+            self.labels.append(torch.tensor([0]))
+        print(len(self.token_ids))
+
+
+    def __len__(self):
+        return len(self.token_ids)
+
+    def __getitem__(self, idx):
+        return self.token_ids[idx], self.attention_masks[idx], self.labels[idx]
+    
+    # Returns the token ids and attention masks for the dataset
+    def encode_text(self, text: str):
+        tokenizer: BertTokenizerFast = BertTokenizerFast.from_pretrained('bert-base-uncased', do_lower_case=True)
+
+        encoded_dict = tokenizer.encode_plus(
+                            text,                      
+                            add_special_tokens = True, 
+                            max_length = MAX_TOKEN_COUNT,
+                            padding = 'max_length',
+                            return_attention_mask = True,
+                            return_tensors = 'pt',
+                            truncation = True
+        )
+
+        token_ids = encoded_dict['input_ids']
+        attention_masks = encoded_dict['attention_mask']
+        return token_ids, attention_masks

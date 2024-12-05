@@ -6,14 +6,27 @@ import pickle
 from datasets import *
 from filereader import *
 
-train_ds = SentimentDataset(
+# train_ds = SentimentDataset(
+#     'https://raw.githubusercontent.com/jerbarnes/semeval22_structured_sentiment/refs/heads/master/data/opener_en/train.json'
+# )
+# with open("pickled_train_dataset.pkl", "wb") as f:
+#     pickle.dump(train_ds, f)
+
+# test_ds = SentimentDataset(
+#     'https://raw.githubusercontent.com/jerbarnes/semeval22_structured_sentiment/refs/heads/master/data/opener_en/test.json'
+# )
+# with open("pickled_test_dataset.pkl", "wb") as f:
+#     pickle.dump(test_ds, f)
+
+
+train_ds = RelationsDataset(
     'https://raw.githubusercontent.com/jerbarnes/semeval22_structured_sentiment/refs/heads/master/data/opener_en/train.json'
 )
-with open("pickled_train_dataset.pkl", "wb") as f:
+with open("pickled_train_dataset_rel.pkl", "wb") as f:
     pickle.dump(train_ds, f)
 
-test_ds = SentimentDataset(
+test_ds = RelationsDataset(
     'https://raw.githubusercontent.com/jerbarnes/semeval22_structured_sentiment/refs/heads/master/data/opener_en/test.json'
 )
-with open("pickled_test_dataset.pkl", "wb") as f:
+with open("pickled_test_dataset_rel.pkl", "wb") as f:
     pickle.dump(test_ds, f)
